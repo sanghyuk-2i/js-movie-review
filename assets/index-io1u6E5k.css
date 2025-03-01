@@ -122,6 +122,14 @@ footer.footer {
 footer.footer p:not(:last-child) {
   margin-bottom: 8px;
 }
+.empty {
+  text-align: center;
+  width: 1280px;
+  height: 480px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 /* modal.css */
 body.modal-open {
   overflow: hidden;
