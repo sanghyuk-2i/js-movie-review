@@ -239,6 +239,23 @@ const render$2 = () => {
   oldContainer.replaceWith(newContainer);
 };
 thumbnailStore.subscribe(render$2);
+const EmptyMovie = () => {
+  return `<div class="empty">
+    <h4 style="font-size: 1.4rem; font-weight: 600;">
+      조회된 정보가 없습니다.
+    </h4>
+  </div>`;
+};
+const ErrorMovie = (props) => {
+  const { message } = props;
+  return `
+    <main id="error-container">
+      <section style="min-height: 480px; display:flex; justify-content: center;' align-items: center;">
+         <h4 style="font-size: 1.4rem; font-weight: 600;">${message}</h4>
+      </section>
+    </main>
+  `;
+};
 const Skeleton = (props) => {
   const _width = (props == null ? void 0 : props.width) ? `${props.width}px` : "100%";
   const _height = (props == null ? void 0 : props.height) ? `${props.height}px` : "100%";
@@ -296,11 +313,36 @@ const movieApi = (url, options) => {
 };
 const getPopularMovie = async (params) => {
   const { page } = params;
-  const response = await movieApi(
-    `/3/discover/movie?include_adult=false&include_video=false&language=ko&region=kr&page=1&sort_by=popularity.desc&page=${page ?? 1}`,
-    { method: "GET" }
-  );
-  return response.json();
+  try {
+    const response = await movieApi(
+      `/3/discover/movie?include_adult=false&include_video=false&language=ko&region=kr&sort_by=popularity.desc&page=${page ?? 1}`,
+      { method: "GET" }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      if (data.status_code === 22) {
+        throw new Error("현재 페이지를 찾을 수 없습니다.");
+      }
+    }
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+const updateMovieThumbnail = (response) => {
+  if (!(response == null ? void 0 : response.results) || response.results.length === 0) return;
+  const {
+    title: thumbnailTitle,
+    vote_average: thumbnailVoteAverage,
+    id: thumbnailId,
+    backdrop_path: thumbnailSrc
+  } = response.results[0];
+  thumbnailStore.set({
+    thumbnailId,
+    thumbnailTitle,
+    thumbnailSrc,
+    thumbnailVoteAverage
+  });
 };
 const searchParams = {
   get: (key) => {
@@ -321,17 +363,21 @@ const searchParams = {
 const MAX_PAGE = 500;
 const DEFAULT_POPULAR_MOVIES = { results: [] };
 const Home = (props = { popularMovies: DEFAULT_POPULAR_MOVIES }) => {
-  const { popularMovies } = props;
+  var _a;
+  const { popularMovies, isError, error } = props;
   const currentPage = Number(searchParams.get("page"));
   const isLastPage = currentPage === MAX_PAGE;
-  const isEmpty = popularMovies.results.length === 0;
+  const isEmpty = (popularMovies == null ? void 0 : popularMovies.results.length) === 0;
+  if (isError) {
+    return ErrorMovie({ message: error });
+  }
   return `
     <main id="home-container">
       <section>
         <h2>지금 인기 있는 영화</h2>
 
-        ${isEmpty ? `<div class="empty"><h4 style="font-size: 1.4rem; font-weight: 600;">조회된 정보가 없습니다.</h4></div>` : `<ul class="thumbnail-list">
-          ${popularMovies.results.map((movie) => MovieItem(movie)).join("")}
+        ${isEmpty ? EmptyMovie() : `<ul class="thumbnail-list">
+          ${(_a = popularMovies.results) == null ? void 0 : _a.map((movie) => `<li>${MovieItem(movie)}</li>`).join("")}
         </ul>`}
       </section>
 
@@ -344,32 +390,23 @@ const Home = (props = { popularMovies: DEFAULT_POPULAR_MOVIES }) => {
     </main>
   `;
 };
-const render$1 = ({ loader: loader2 }) => {
+const render$1 = ({ loader: loader2, isError, error }) => {
   const oldContainer = document.querySelector("#home-container");
   if (!oldContainer) return;
   const newContainer = document.createElement("div");
   newContainer.id = "home-container";
-  newContainer.innerHTML = Home({ popularMovies: loader2 });
+  newContainer.innerHTML = Home({ popularMovies: loader2, isError, error });
   oldContainer.replaceWith(newContainer);
 };
 const loader = async () => {
   const page = Number(searchParams.get("page")) || 1;
-  const data = await getPopularMovie({ page });
-  if (data.results.length > 0) {
-    const {
-      title: thumbnailTitle,
-      vote_average: thumbnailVoteAverage,
-      id: thumbnailId,
-      backdrop_path: thumbnailSrc
-    } = data.results[0];
-    thumbnailStore.set({
-      thumbnailId,
-      thumbnailTitle,
-      thumbnailSrc,
-      thumbnailVoteAverage
-    });
+  try {
+    const data = await getPopularMovie({ page });
+    updateMovieThumbnail(data);
+    render$1({ isError: false, loader: data });
+  } catch (error) {
+    render$1({ isError: true, error: error.message });
   }
-  render$1({ loader: data });
 };
 addEvent("click", "#movie_more_load", () => {
   const page = Number(searchParams.get("page")) || 1;
